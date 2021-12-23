@@ -24,12 +24,9 @@ echo ""
 check_root
 
 apt update
-apt upgrade -y
-apt autoremove
+apt install ansible git-core -y
 
-
-echo "Installing VSCode"
-curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
-echo "deb [arch=amd64] https://packages.microsoft.com/repos/vscode stable main" | tee /etc/apt/sources.list.d/vscode.list
-apt install code -y
-echo "VSCode installed"
+cd
+git clone https://github.com/geraldoandradee/setup-zorin-os-16.git
+cd setup-zorin-os-16
+ansible-playbook setup.yml -i hosts.ini
