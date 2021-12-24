@@ -63,3 +63,20 @@
       - golang-1.17
       - golang-go
     state: present
+
+- name: Add NodeJS signing key
+  ansible.builtin.apt_key:
+    url: https://deb.nodesource.com/gpgkey/nodesource.gpg.key
+    state: present 
+
+- name: Add repository for Node 16
+  ansible.builtin.apt_repository:
+    repo: deb https://deb.nodesource.com/node_16.x focal main
+    state: present
+    filename: nodesource
+
+- name: Install NodeJS 16
+  apt:
+    pkg:
+      - nodejs
+    state: present
