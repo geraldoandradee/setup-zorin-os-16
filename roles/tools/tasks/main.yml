@@ -117,3 +117,9 @@
       - google-cloud-sdk
       - kubectl
     state: present   
+
+- name: Install terminator
+  apt:
+    pkg:
+      - terminator
+    state: present   
