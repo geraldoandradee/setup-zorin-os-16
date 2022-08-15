@@ -1,0 +1,124 @@
+- name: Add VSCode signing key
+  ansible.builtin.apt_key:
+    url: https://packages.microsoft.com/keys/microsoft.asc
+    state: present  
+
+- name: Add repository for vscode
+  ansible.builtin.apt_repository:
+    repo: deb [arch=amd64] https://packages.microsoft.com/repos/vscode stable main
+    state: present
+    filename: vscode
+
+- name: Install VSCode
+  apt:
+    name: code
+    state: present
+
+- name: Remove old versions of Docker before install CE
+  apt:
+    pkg:
+      - docker 
+      - docker-engine  
+      - docker.io 
+      - containerd 
+      - runc
+    state: absent
+
+- name: Install required packages for Docker CE
+  apt:
+    pkg:
+      - ca-certificates
+      - curl
+      - gnupg2
+      - lsb-release 
+    state: present
+
+- name: Add Docker CE signing key
+  ansible.builtin.apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present  
+    
+- name: Add repository for Docker CE
+  ansible.builtin.apt_repository:
+    repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
+    state: present
+    filename: docker
+
+- name: Install Docker CE
+  apt:
+    pkg:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose
+    state: present
+
+- name: Add Golang PPA
+  ansible.builtin.apt_repository:
+    repo: ppa:longsleep/golang-backports
+      
+- name: Install Golang
+  apt:
+    pkg:
+      - golang-go
+    state: present
+
+- name: Add NodeJS signing key
+  ansible.builtin.apt_key:
+    url: https://deb.nodesource.com/gpgkey/nodesource.gpg.key
+    state: present 
+
+- name: Add repository for Node 16
+  ansible.builtin.apt_repository:
+    repo: deb https://deb.nodesource.com/node_16.x focal main
+    state: present
+    filename: nodesource
+
+- name: Install NodeJS 16
+  apt:
+    pkg:
+      - nodejs
+    state: present
+
+
+- name: Add Google Chrome signing key
+  ansible.builtin.apt_key:
+    url: https://dl.google.com/linux/linux_signing_key.pub
+    state: present 
+
+- name: Add Google Chrome's repository
+  ansible.builtin.apt_repository:
+    repo: deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main
+    state: present
+    filename: google-chrome
+
+- name: Install Google Chrome
+  apt:
+    pkg:
+      - google-chrome-stable
+    state: present    
+
+
+- name: Add google-cloud-sdk's signing key
+  ansible.builtin.apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    state: present 
+
+- name: Add google-cloud-sdk's repository
+  ansible.builtin.apt_repository:
+    repo: deb https://packages.cloud.google.com/apt cloud-sdk main
+    state: present
+    filename: google-cloud-sdk
+
+- name: Install google-cloud-sdk
+  apt:
+    pkg:
+      - google-cloud-sdk
+      - kubectl
+    state: present   
+
+- name: Install terminator
+  apt:
+    pkg:
+      - terminator
+    state: present   
