@@ -30,3 +30,4 @@ cd
 git clone https://github.com/geraldoandradee/setup-zorin-os-16.git
 cd setup-zorin-os-16
 ansible-playbook setup.yml -i hosts.ini
+rm -rf setup-zorin-os-16
