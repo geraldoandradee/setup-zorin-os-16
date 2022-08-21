@@ -7,3 +7,4 @@
     - role: update
     - role: tools   
     - role: clean    
+    - role: dev
