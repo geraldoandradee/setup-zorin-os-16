@@ -122,3 +122,9 @@
     pkg:
       - terminator
     state: present   
+
+- name: Install Java Open JDK 17
+  apt:
+    pkg:
+      - openjdk-17-jdk
+    state: present   
