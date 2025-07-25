@@ -63,23 +63,33 @@
       - golang-go
     state: present
 
-- name: Add NodeJS signing key
-  ansible.builtin.apt_key:
-    url: https://deb.nodesource.com/gpgkey/nodesource.gpg.key
-    state: present 
+- name: Install nvm
+  ansible.builtin.shell: |
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+  args:
+    creates: "{{ ansible_env.HOME }}/.nvm/nvm.sh"
 
-- name: Add repository for Node 16
-  ansible.builtin.apt_repository:
-    repo: deb https://deb.nodesource.com/node_16.x focal main
-    state: present
-    filename: nodesource
+- name: Install Node.js 22 using nvm
+  ansible.builtin.shell: |
+    . {{ ansible_env.HOME }}/.nvm/nvm.sh && nvm install 22
+  args:
+    creates: "{{ ansible_env.HOME }}/.nvm/versions/node"
 
-- name: Install NodeJS 16
-  apt:
-    pkg:
-      - nodejs
-    state: present
+- name: Set Node.js 22 as default version
+  ansible.builtin.shell: |
+    . {{ ansible_env.HOME }}/.nvm/nvm.sh && nvm alias default 22
+  args:
+    creates: "{{ ansible_env.HOME }}/.nvm/alias/default"
 
+- name: Verify Node.js installation
+  ansible.builtin.shell: |
+    . {{ ansible_env.HOME }}/.nvm/nvm.sh && node -v
+  register: node_version
+  changed_when: false
+
+- name: Display Node.js version
+  ansible.builtin.debug:
+    msg: "Node.js version: {{ node_version.stdout }}"
 
 - name: Add Google Chrome signing key
   ansible.builtin.apt_key:
@@ -128,3 +138,143 @@
     pkg:
       - openjdk-17-jdk
     state: present   
+
+- name: Install Dev Tools
+  apt:
+    pkg:
+      - build-essential 
+      - gcc
+      - jq
+    state: present
+
+- name: Install Homebrew prerequisites
+  apt:
+    pkg:
+      - curl
+      - file
+      - git
+    state: present
+
+- name: Install Homebrew
+  ansible.builtin.shell: |
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  args:
+    creates: /home/linuxbrew/.linuxbrew/bin/brew
+  become: false
+
+- name: Add Homebrew to PATH in .bashrc
+  ansible.builtin.lineinfile:
+    path: "{{ ansible_env.HOME }}/.bashrc"
+    line: 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
+    create: yes
+  become: false
+
+- name: Add Homebrew to PATH in .profile
+  ansible.builtin.lineinfile:
+    path: "{{ ansible_env.HOME }}/.profile"
+    line: 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
+    create: yes
+  become: false
+
+- name: Get latest OpenSnitch release info from GitHub API
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/evilsocket/opensnitch/releases/latest
+    method: GET
+    return_content: yes
+  register: opensnitch_release
+
+- name: Create temporary directory for OpenSnitch downloads
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: opensnitch
+  register: opensnitch_temp_dir
+
+- name: Find OpenSnitch daemon deb package URL
+  ansible.builtin.set_fact:
+    opensnitch_daemon_url: "{{ item.browser_download_url }}"
+    opensnitch_daemon_name: "{{ item.name }}"
+  loop: "{{ opensnitch_release.json.assets }}"
+  when: 
+    - item.name is match("opensnitch_.*_amd64.deb")
+    - "'ui' not in item.name"
+
+- name: Find OpenSnitch UI deb package URL
+  ansible.builtin.set_fact:
+    opensnitch_ui_url: "{{ item.browser_download_url }}"
+    opensnitch_ui_name: "{{ item.name }}"
+  loop: "{{ opensnitch_release.json.assets }}"
+  when: item.name is match("python3-opensnitch-ui_.*_all.deb")
+
+- name: Download OpenSnitch daemon deb package
+  ansible.builtin.get_url:
+    url: "{{ opensnitch_daemon_url }}"
+    dest: "{{ opensnitch_temp_dir.path }}/{{ opensnitch_daemon_name }}"
+    mode: '0644'
+  when: opensnitch_daemon_url is defined
+
+- name: Download OpenSnitch UI deb package
+  ansible.builtin.get_url:
+    url: "{{ opensnitch_ui_url }}"
+    dest: "{{ opensnitch_temp_dir.path }}/{{ opensnitch_ui_name }}"
+    mode: '0644'
+  when: opensnitch_ui_url is defined
+
+- name: Install OpenSnitch packages
+  ansible.builtin.apt:
+    deb: "{{ item }}"
+    state: present
+  loop:
+    - "{{ opensnitch_temp_dir.path }}/{{ opensnitch_daemon_name }}"
+    - "{{ opensnitch_temp_dir.path }}/{{ opensnitch_ui_name }}"
+  when: 
+    - opensnitch_daemon_name is defined
+    - opensnitch_ui_name is defined
+
+- name: Install OpenSnitch GUI dependencies
+  apt:
+    pkg:
+      - python3-pip
+      - python3-pyasn
+    state: present
+
+- name: Install qt-material for OpenSnitch GUI themes
+  ansible.builtin.pip:
+    name: qt-material
+    state: present
+  become: false
+
+- name: Fix OpenSnitch gRPC and protobuf compatibility
+  ansible.builtin.pip:
+    name:
+      - grpcio==1.44.0
+      - protobuf==3.20.3
+    state: present
+
+- name: Enable and start OpenSnitch daemon
+  ansible.builtin.systemd:
+    name: opensnitch
+    state: started
+    enabled: yes
+    daemon_reload: yes
+
+- name: Clean up temporary directory
+  ansible.builtin.file:
+    path: "{{ opensnitch_temp_dir.path }}"
+    state: absent
+
+- name: Display OpenSnitch installation info
+  ansible.builtin.debug:
+    msg: |
+      OpenSnitch has been installed successfully!
+      - Daemon version: {{ opensnitch_daemon_name }}
+      - UI version: {{ opensnitch_ui_name }}
+      - Qt-material themes installed for better GUI appearance
+      - gRPC (1.44.0) and protobuf (3.20.3) compatibility fixed
+      - python3-pyasn installed for IP network name display
+      
+      To use OpenSnitch:
+      1. Run 'opensnitch-ui' to launch the GUI
+      2. If GUI doesn't appear, kill existing process: 'pkill -f opensnitch-ui' then retry
+      3. The daemon is running and will start automatically on boot
+      
+      OpenSnitch will now intercept network connections and prompt for permission!
