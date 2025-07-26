@@ -278,3 +278,43 @@
       3. The daemon is running and will start automatically on boot
       
       OpenSnitch will now intercept network connections and prompt for permission!
+
+- name: Install k3s (lightweight Kubernetes)
+  ansible.builtin.shell: |
+    curl -sfL https://get.k3s.io | sh -
+  args:
+    creates: /usr/local/bin/k3s
+
+- name: Stop k3s service to modify configuration
+  ansible.builtin.systemd:
+    name: k3s
+    state: stopped
+
+- name: Configure k3s service to allow normal user access
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/system/k3s.service
+    regexp: '^ExecStart='
+    line: 'ExecStart=/usr/local/bin/k3s server --write-kubeconfig-mode 644'
+    backup: yes
+
+- name: Reload systemd daemon after k3s service modification
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+- name: Start and enable k3s service
+  ansible.builtin.systemd:
+    name: k3s
+    state: started
+    enabled: yes
+
+- name: Display k3s installation info
+  ansible.builtin.debug:
+    msg: |
+      k3s (lightweight Kubernetes) has been installed successfully!
+      
+      Usage:
+      - k3s kubectl get nodes (check cluster status)
+      - k3s kubectl get pods -A (see all pods)
+      - k3s kubectl get nodes (alternative command)
+      
+      k3s will start automatically on boot
