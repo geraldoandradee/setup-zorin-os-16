@@ -1,3 +1,8 @@
+- name: Set correct user and home directory for sudo execution
+  ansible.builtin.set_fact:
+    target_user: "{{ ansible_env.SUDO_USER | default(ansible_env.USER) }}"
+    target_home: "{{ '/home/' + (ansible_env.SUDO_USER | default(ansible_env.USER)) if (ansible_env.SUDO_USER | default(ansible_env.USER)) != 'root' else '/root' }}"
+
 - name: Add VSCode signing key
   ansible.builtin.apt_key:
     url: https://packages.microsoft.com/keys/microsoft.asc
@@ -53,6 +58,37 @@
       - docker-compose
     state: present
 
+- name: Start and enable Docker service
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Add user to docker group
+  ansible.builtin.user:
+    name: "{{ target_user }}"
+    groups: docker
+    append: yes
+
+- name: Display Docker post-install info
+  ansible.builtin.debug:
+    msg: |
+      Docker CE has been installed and configured successfully!
+      
+      Post-install configuration completed:
+      - Docker service is running and enabled on boot
+      - User '{{ target_user }}' added to docker group
+      
+      IMPORTANT: You need to log out and log back in (or restart) 
+      for the docker group membership to take effect.
+      
+      After relogin, you can run:
+      - docker --version
+      - docker run hello-world
+      - docker ps
+      
+      No more 'sudo' needed for docker commands!
+
 - name: Add Golang PPA
   ansible.builtin.apt_repository:
     repo: ppa:longsleep/golang-backports
@@ -63,27 +99,62 @@
       - golang-go
     state: present
 
+- name: Check if nvm is already installed
+  ansible.builtin.stat:
+    path: "{{ target_home }}/.nvm/nvm.sh"
+  register: nvm_installed
+  become: false
+  become_user: "{{ target_user }}"
+
+- name: Check if .nvm directory exists
+  ansible.builtin.stat:
+    path: "{{ target_home }}/.nvm"
+  register: nvm_dir_exists
+  become: false
+  become_user: "{{ target_user }}"
+
+- name: Remove incomplete nvm installation if nvm.sh missing
+  ansible.builtin.file:
+    path: "{{ target_home }}/.nvm"
+    state: absent
+  when: 
+    - nvm_dir_exists.stat.exists
+    - not nvm_installed.stat.exists
+  become: false
+  become_user: "{{ target_user }}"
+
 - name: Install nvm
   ansible.builtin.shell: |
+    export HOME="{{ target_home }}"
     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-  args:
-    creates: "{{ ansible_env.HOME }}/.nvm/nvm.sh"
+  when: not nvm_installed.stat.exists
+  become: false
+  become_user: "{{ target_user }}"
 
 - name: Install Node.js 22 using nvm
   ansible.builtin.shell: |
-    . {{ ansible_env.HOME }}/.nvm/nvm.sh && nvm install 22
+    export HOME="{{ target_home }}"
+    . {{ target_home }}/.nvm/nvm.sh && nvm install 22
   args:
-    creates: "{{ ansible_env.HOME }}/.nvm/versions/node"
+    creates: "{{ target_home }}/.nvm/versions/node"
+  become: false
+  become_user: "{{ target_user }}"
 
 - name: Set Node.js 22 as default version
   ansible.builtin.shell: |
-    . {{ ansible_env.HOME }}/.nvm/nvm.sh && nvm alias default 22
+    export HOME="{{ target_home }}"
+    . {{ target_home }}/.nvm/nvm.sh && nvm alias default 22
   args:
-    creates: "{{ ansible_env.HOME }}/.nvm/alias/default"
+    creates: "{{ target_home }}/.nvm/alias/default"
+  become: false
+  become_user: "{{ target_user }}"
 
 - name: Verify Node.js installation
   ansible.builtin.shell: |
-    . {{ ansible_env.HOME }}/.nvm/nvm.sh && node -v
+    export HOME="{{ target_home }}"
+    . {{ target_home }}/.nvm/nvm.sh && node -v
+  become: false
+  become_user: "{{ target_user }}"
   register: node_version
   changed_when: false
 
@@ -157,24 +228,28 @@
 
 - name: Install Homebrew
   ansible.builtin.shell: |
+    export HOME="{{ target_home }}"
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
   args:
     creates: /home/linuxbrew/.linuxbrew/bin/brew
   become: false
+  become_user: "{{ target_user }}"
 
 - name: Add Homebrew to PATH in .bashrc
   ansible.builtin.lineinfile:
-    path: "{{ ansible_env.HOME }}/.bashrc"
+    path: "{{ target_home }}/.bashrc"
     line: 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
     create: yes
   become: false
+  become_user: "{{ target_user }}"
 
 - name: Add Homebrew to PATH in .profile
   ansible.builtin.lineinfile:
-    path: "{{ ansible_env.HOME }}/.profile"
+    path: "{{ target_home }}/.profile"
     line: 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
     create: yes
   become: false
+  become_user: "{{ target_user }}"
 
 - name: Get latest OpenSnitch release info from GitHub API
   ansible.builtin.uri:
@@ -242,6 +317,7 @@
     name: qt-material
     state: present
   become: false
+  become_user: "{{ target_user }}"
 
 - name: Fix OpenSnitch gRPC and protobuf compatibility
   ansible.builtin.pip:
@@ -249,6 +325,8 @@
       - grpcio==1.44.0
       - protobuf==3.20.3
     state: present
+  become: false
+  become_user: "{{ target_user }}"
 
 - name: Enable and start OpenSnitch daemon
   ansible.builtin.systemd:
