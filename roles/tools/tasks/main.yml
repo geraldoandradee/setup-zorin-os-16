@@ -30,4 +30,14 @@
   apt:
     pkg:
       - mattermost-desktop
-    state: present  
+    state: present
+
+- name: Add KeePassXC PPA
+  ansible.builtin.apt_repository:
+    repo: ppa:phoerious/keepassxc
+      
+- name: Install KeePassXC
+  apt:
+    pkg:
+      - keepassxc
+    state: present
